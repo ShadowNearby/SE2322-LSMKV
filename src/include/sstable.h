@@ -10,28 +10,42 @@
 #include <cstring>
 #include <fstream>
 #include <vector>
+#include <bitset>
+#include "MurmurHash3.h"
+#include "memtable.h"
 
-const int TABLE_BYTES = 10240;
+const int TABLE_BYTES = 1024 * 1024 * 2;
+const int HEADER_BYTES = 10240 + 8 * 4;
+const int FILTER_LONGS = 10240 / 64;
 
 class SSTable
 {
 public:
-    static uint64_t current_time_stamp;
+    static uint64_t current_timestamp;
     uint64_t timestamp;
     uint64_t count;
     uint64_t max_key;
     uint64_t min_key;
+    std::bitset<10240> filter;
 
 public:
     std::map<uint64_t, std::string> table_map;
 
     SSTable();
 
-    void to_sst_file();
+    explicit SSTable(const MemTable &mem_table);
 
-    void read_sst_file();
+    void to_sst_file(const std::string &dir);
 
+    void read_sst_file(const std::string &file_path);
 
+    void read_sst_header(const std::string &file_path);
+
+    static bool key_exist(const std::string &file_path, uint64_t key);
+
+    void filter_hash(uint64_t key);
+
+    bool filter_exist(uint64_t key);
 };
 
 void long_to_bytes(uint64_t num, char **des);

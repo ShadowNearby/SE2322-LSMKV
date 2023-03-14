@@ -1,12 +1,15 @@
-#include "./include/kvstore.h"
+#include "kvstore.h"
 #include <string>
 
 KVStore::KVStore(const std::string &dir) : KVStoreAPI(dir)
 {
+    data_dir = dir;
+    table = new MemTable();
 }
 
 KVStore::~KVStore()
 {
+    delete table;
 }
 
 /**
@@ -15,7 +18,13 @@ KVStore::~KVStore()
  */
 void KVStore::put(uint64_t key, const std::string &s)
 {
-    table.table_map[key] = s;
+    if (!table->put(key, s)) {
+        SSTable new_sstable(*table);
+        new_sstable.to_sst_file(data_dir);
+        delete table;
+        table = new MemTable();
+        table->put(key, s);
+    }
 }
 
 /**
@@ -24,10 +33,23 @@ void KVStore::put(uint64_t key, const std::string &s)
  */
 std::string KVStore::get(uint64_t key)
 {
-    std::string val = table.table_map[key];
-    if (val.empty())
-        table.table_map.erase(key);
-    return val;
+    auto from_skiplist = table->get(key);
+    if (!from_skiplist.empty())
+        return from_skiplist;
+    for (int i = 0; i <= SSTable::current_timestamp; ++i) {
+        std::string file_path = data_dir + std::to_string(i) + ".sst";
+        if (SSTable::key_exist(file_path, key)) {
+            SSTable newest_sst;
+            newest_sst.read_sst_file(file_path);
+            auto key_it = newest_sst.table_map.find(key);
+            if (key_it == newest_sst.table_map.end())
+                continue;
+            if (key_it->second == "~DELETED~")
+                return "";
+            return key_it->second;
+        }
+    }
+    return "";
 }
 
 /**
@@ -36,7 +58,7 @@ std::string KVStore::get(uint64_t key)
  */
 bool KVStore::del(uint64_t key)
 {
-    return table.table_map.erase(key);
+    return table->del(key);
 }
 
 /**
@@ -45,7 +67,12 @@ bool KVStore::del(uint64_t key)
  */
 void KVStore::reset()
 {
-    table.table_map.clear();
+    delete table;
+    table = new MemTable();
+    for (int i = 0; i <= SSTable::current_timestamp; ++i) {
+        auto file_name = data_dir + std::to_string(i) + ".sst";
+        std::remove(file_name.c_str());
+    }
 }
 
 /**
@@ -55,9 +82,5 @@ void KVStore::reset()
  */
 void KVStore::scan(uint64_t key1, uint64_t key2, std::list<std::pair<uint64_t, std::string> > &list)
 {
-    for (const auto &it: table.table_map) {
-        if (it.first >= key1 && it.first <= key2) {
-            list.emplace_back(it.first, it.second);
-        }
-    }
+    table->scan(key1, key2, list);
 }

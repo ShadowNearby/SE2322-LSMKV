@@ -7,10 +7,13 @@
 #include <string>
 #include <utility>
 #include <random>
+#include <list>
 
-const double TABLE_P = (double) 1 / 3;
+const double TABLE_P = 0.25;
 const int TABLE_MAX_LEVEL = 32;
 const int TABLE_MASK = 0xfff;
+const int INIT_BYTES = 10240 + 32;
+const int MAX_BYTES = 1024 * 1024 * 2 - INIT_BYTES;
 
 class Node
 {
@@ -36,23 +39,24 @@ public:
 
 class MemTable
 {
-private:
+public:
     Node *head;
     Node *tail;
     int level;
+    int bytes_num;
 
-    int randomLevel();
+    static int randomLevel();
 
 public:
     MemTable();
 
-    ~MemTable()
-    {
-        delete head;
-        delete tail;
-    };
+    ~MemTable();
 
-    void insert(uint64_t key, const std::string &value);
+    bool put(const uint64_t key, const std::string &value);
 
-    std::string find(uint64_t key);
+    std::string get(uint64_t key) const;
+
+    bool del(uint64_t key) const;
+
+    void scan(uint64_t key1, uint64_t key2, std::list<std::pair<uint64_t, std::string> > &list) const;
 };

@@ -9,7 +9,7 @@ INCLUDE_DIRECTORIES(src/include)
 
 SET(CMAKE_CXX_FLAGS "-std=c++14 -Wall")
 
-ADD_EXECUTABLE(correctness src/correctness.cc src/kvstore.cc src/sstable/sstable.cpp)
+ADD_EXECUTABLE(correctness src/correctness.cc src/kvstore.cc src/sstable/sstable.cpp src/memtable/memtable.cpp)
 
 ADD_EXECUTABLE(persistence src/persistence.cc src/kvstore.cc)
 

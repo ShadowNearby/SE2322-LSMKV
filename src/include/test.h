@@ -6,6 +6,9 @@
 
 #include "kvstore.h"
 
+#define CMAKE true
+const std::string data_dir = CMAKE ? "../data/" : "./data/";
+
 class Test
 {
 protected:

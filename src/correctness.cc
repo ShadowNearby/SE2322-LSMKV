@@ -111,7 +111,7 @@ int main(int argc, char *argv[])
     std::cout << std::endl;
     std::cout.flush();
 
-    CorrectnessTest test("./data", verbose);
+    CorrectnessTest test(data_dir, verbose);
 
     test.start_test();
 
