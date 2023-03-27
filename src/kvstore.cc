@@ -1,5 +1,5 @@
 #include "kvstore.h"
-#include <string>
+
 
 KVStore::KVStore(const std::string &dir) : KVStoreAPI(dir)
 {
@@ -9,6 +9,10 @@ KVStore::KVStore(const std::string &dir) : KVStoreAPI(dir)
 
 KVStore::~KVStore()
 {
+    for (uint64_t i = 0; i <= current_timestamp; ++i) {
+        auto file_name = data_dir + std::to_string(i) + ".sst";
+        std::remove(file_name.c_str());
+    }
     delete table;
 }
 
@@ -19,8 +23,9 @@ KVStore::~KVStore()
 void KVStore::put(uint64_t key, const std::string &s)
 {
     if (!table->put(key, s)) {
-        SSTable new_sstable(*table);
-        new_sstable.to_sst_file(data_dir);
+        IndexData indexData;
+        table->to_sst_file_index(data_dir, indexData);
+        index_list.push_back(indexData);
         delete table;
         table = new MemTable();
         table->put(key, s);
@@ -33,21 +38,18 @@ void KVStore::put(uint64_t key, const std::string &s)
  */
 std::string KVStore::get(uint64_t key)
 {
-    auto from_skiplist = table->get(key);
-    if (!from_skiplist.empty())
-        return from_skiplist;
-    for (int i = 0; i <= SSTable::current_timestamp; ++i) {
+    auto result = table->get(key);
+    if (result == "~DELETE~")
+        return "";
+    if (!result.empty())
+        return result;
+    for (uint64_t i = 1; i <= current_timestamp; ++i) {
         std::string file_path = data_dir + std::to_string(i) + ".sst";
-        if (SSTable::key_exist(file_path, key)) {
-            SSTable newest_sst;
-            newest_sst.read_sst_file(file_path);
-            auto key_it = newest_sst.table_map.find(key);
-            if (key_it == newest_sst.table_map.end())
-                continue;
-            if (key_it->second == "~DELETED~")
-                return "";
-            return key_it->second;
-        }
+        result = SSTable::get_value_index(file_path, key, index_list[i - 1]);
+        if (result == "~DELETE~")
+            return "";
+        if (!result.empty())
+            return result;
     }
     return "";
 }
@@ -58,7 +60,10 @@ std::string KVStore::get(uint64_t key)
  */
 bool KVStore::del(uint64_t key)
 {
-    return table->del(key);
+    std::string find_result = get(key);
+    if (find_result.empty())
+        return false;
+    return table->put(key, "~DELETE~");
 }
 
 /**
@@ -69,10 +74,11 @@ void KVStore::reset()
 {
     delete table;
     table = new MemTable();
-    for (int i = 0; i <= SSTable::current_timestamp; ++i) {
+    for (uint64_t i = 0; i <= current_timestamp; ++i) {
         auto file_name = data_dir + std::to_string(i) + ".sst";
         std::remove(file_name.c_str());
     }
+    current_timestamp = 0;
 }
 
 /**
@@ -82,5 +88,13 @@ void KVStore::reset()
  */
 void KVStore::scan(uint64_t key1, uint64_t key2, std::list<std::pair<uint64_t, std::string> > &list)
 {
-    table->scan(key1, key2, list);
+    std::map<uint64_t, std::string> key_map;
+    table->scan(key1, key2, key_map);
+    for (uint64_t i = 1; i <= current_timestamp; ++i) {
+        std::string file_path = data_dir + std::to_string(i) + ".sst";
+        SSTable::scan_value(file_path, key1, key2, key_map);
+    }
+    for (const auto &item: key_map) {
+        list.emplace_back(item.first, item.second);
+    }
 }

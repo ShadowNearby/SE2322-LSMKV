@@ -11,6 +11,7 @@ private:
 //    SSTable table;
     MemTable *table;
     std::string data_dir;
+    std::vector<IndexData> index_list;
 public:
     KVStore(const std::string &dir);
 

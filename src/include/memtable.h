@@ -4,16 +4,18 @@
 
 #pragma once
 
-#include <string>
-#include <utility>
-#include <random>
-#include <list>
+#include "constant.h"
 
-const double TABLE_P = 0.25;
-const int TABLE_MAX_LEVEL = 32;
-const int TABLE_MASK = 0xfff;
-const int INIT_BYTES = 10240 + 32;
-const int MAX_BYTES = 1024 * 1024 * 2 - INIT_BYTES;
+
+struct IndexData
+{
+    uint64_t max_key;
+    uint64_t min_key;
+    uint64_t count;
+    std::bitset<FILTER_BITS> filter;
+    std::vector<uint64_t> key_list;
+    std::vector<uint32_t> offset_list;
+};
 
 class Node
 {
@@ -43,20 +45,24 @@ public:
     Node *head;
     Node *tail;
     int level;
-    int bytes_num;
+    size_t bytes_num;
 
-    static int randomLevel();
+    static uint32_t randomLevel();
 
 public:
     MemTable();
 
     ~MemTable();
 
-    bool put(const uint64_t key, const std::string &value);
+    bool put(uint64_t key, const std::string &value);
 
     std::string get(uint64_t key) const;
 
     bool del(uint64_t key) const;
 
-    void scan(uint64_t key1, uint64_t key2, std::list<std::pair<uint64_t, std::string> > &list) const;
+    void scan(uint64_t key1, uint64_t key2, std::map<uint64_t, std::string> &list) const;
+
+    void to_sst_file(const std::string &dir) const;
+
+    void to_sst_file_index(const std::string &dir, IndexData &indexData) const;
 };
