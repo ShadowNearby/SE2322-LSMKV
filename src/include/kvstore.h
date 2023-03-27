@@ -1,5 +1,6 @@
 #pragma once
 
+#include "utils.h"
 #include "kvstore_api.h"
 #include "MurmurHash3.h"
 #include "sstable.h"

@@ -3,7 +3,7 @@
 //
 
 #include "memtable.h"
-#include "sstable.h"
+#include "MurmurHash3.h"
 
 MemTable::MemTable() : level(0), bytes_num(0)
 {
@@ -172,8 +172,9 @@ void MemTable::to_sst_file(const std::string &dir) const
     delete[] data;
 }
 
-void MemTable::to_sst_file_index(const std::string &dir, IndexData &indexData) const
+void MemTable::to_sst_file_index(const std::string &file_path) const
 {
+    IndexData index_data;
     auto head_it = head->next[0];
     std::map<uint64_t, std::string> key_map;
     while (head_it != tail) {
@@ -186,24 +187,23 @@ void MemTable::to_sst_file_index(const std::string &dir, IndexData &indexData) c
     current_timestamp++;
     uint64_t timestamp = current_timestamp;
     size_t offset = 4 * 8 + count * 12 + FILTER_BYTES;
-    std::fstream f;
-    f.open(dir + std::to_string(timestamp) + ".sst", std::ios::binary | std::ios::out);
     char *data = new char[TABLE_BYTES];
     char *current = data;
     long_to_bytes(timestamp, &current);
     long_to_bytes(count, &current);
     long_to_bytes(max_key_mem, &current);
     long_to_bytes(min_key_mem, &current);
-    indexData.count = count;
-    indexData.min_key = min_key_mem;
-    indexData.max_key = max_key_mem;
+    index_data.timestamp = timestamp;
+    index_data.count = count;
+    index_data.min_key = min_key_mem;
+    index_data.max_key = max_key_mem;
     current += FILTER_BYTES;
     char *pos_offset = data + offset;
     uint32_t bytes_sum = HEADER_BYTES + count * 12;
     std::bitset<FILTER_BITS> filter;
     for (auto &it: key_map) {
-        indexData.key_list.push_back(it.first);
-        indexData.offset_list.push_back(offset);
+        index_data.key_list.push_back(it.first);
+        index_data.offset_list.push_back(offset);
         long_to_bytes(it.first, &current);
         int_to_bytes(offset, &current);
         string_to_bytes(it.second, &pos_offset);
@@ -214,7 +214,7 @@ void MemTable::to_sst_file_index(const std::string &dir, IndexData &indexData) c
         MurmurHash3_x64_128(&key, 8, 1, hash);
         for (unsigned int i: hash) {
             filter[i % FILTER_BITS] = true;
-            indexData.filter[i % FILTER_BITS] = true;
+            index_data.filter[i % FILTER_BITS] = true;
         }
     }
     current = 4 * 8 + data;
@@ -222,7 +222,10 @@ void MemTable::to_sst_file_index(const std::string &dir, IndexData &indexData) c
     for (uint32_t i = 0; i < FILTER_LONGS; ++i) {
         long_to_bytes(std::bitset<64>(filter_str.substr(64 * i, 64)).to_ullong(), &current);
     }
-    indexData.offset_list.push_back(bytes_sum);
+    std::fstream f;
+    f.open(file_path, std::ios::binary | std::ios::out);
+    index_data.offset_list.push_back(bytes_sum);
+    all_sst_index[0][file_path] = index_data;
     f.write(data, bytes_sum);
     delete[] data;
 }

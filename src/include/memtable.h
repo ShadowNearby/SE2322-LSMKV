@@ -4,18 +4,8 @@
 
 #pragma once
 
-#include "constant.h"
+#include "global.h"
 
-
-struct IndexData
-{
-    uint64_t max_key;
-    uint64_t min_key;
-    uint64_t count;
-    std::bitset<FILTER_BITS> filter;
-    std::vector<uint64_t> key_list;
-    std::vector<uint32_t> offset_list;
-};
 
 class Node
 {
@@ -25,7 +15,7 @@ public:
     int level;
     Node **next;
 
-    Node() : key(0), value(""), level(0), next(nullptr)
+    Node() : key(0), level(0), next(nullptr)
     {}
 
     Node(uint64_t k, std::string v, int l) : key(k), value(std::move(v)), level(l)
@@ -35,7 +25,7 @@ public:
 
     ~Node()
     {
-        delete next;
+        delete[] next;
     }
 };
 
@@ -64,5 +54,5 @@ public:
 
     void to_sst_file(const std::string &dir) const;
 
-    void to_sst_file_index(const std::string &dir, IndexData &indexData) const;
+    void to_sst_file_index(const std::string &file_path) const;
 };

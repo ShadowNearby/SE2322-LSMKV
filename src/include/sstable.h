@@ -6,7 +6,7 @@
 
 #include "MurmurHash3.h"
 #include "memtable.h"
-
+#include "utils.h"
 
 class SSTable
 {
@@ -33,25 +33,29 @@ public:
 
     static bool key_exist(const std::string &file_path, uint64_t key);
 
+    static void
+    read_sst_to_map(const std::string &file_path, const IndexData &index_data, std::map<uint64_t, std::string> &target);
+
     void filter_hash(uint64_t key);
 
     static std::string get_value_all_disk(const std::string &file_path, uint64_t key);
 
-    static std::string get_value_index(const std::string &file_path, uint64_t key, const IndexData &indexData);
+    static std::string get_value_index(const std::string &file_path, uint64_t key, const IndexData &index_data);
 
     static void
     scan_value(const std::string &file_path, uint64_t key1, uint64_t key2, std::map<uint64_t, std::string> &list);
+
+    static void merge(const std::string &data_dir);
+
+    static void maps_to_sst(uint32_t level, const std::string &data_dir, const std::map<uint64_t, std::string> &target);
+
+    static void
+    one_map_to_sst(uint32_t level, const std::string &file_path, const std::map<uint64_t, std::string> &target);
+
+    static uint32_t sst_number(const std::string &file_path);
+
+    static void get_newest_sst(uint32_t n, uint32_t level, std::vector<std::string> &target);
 };
 
-void long_to_bytes(uint64_t num, char **des);
 
-void int_to_bytes(uint32_t num, char **des);
-
-void string_to_bytes(const std::string &str, char **des);
-
-uint64_t bytes_to_long(char **src);
-
-uint32_t bytes_to_int(char **src);
-
-std::string bytes_to_string(char **src, uint32_t len);
 
