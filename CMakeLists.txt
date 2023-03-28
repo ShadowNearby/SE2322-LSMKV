@@ -11,6 +11,6 @@ SET(CMAKE_CXX_FLAGS "-std=c++14 -Wall")
 
 ADD_EXECUTABLE(correctness src/correctness.cc src/kvstore.cc src/sstable/sstable.cpp src/memtable/memtable.cpp src/global.cpp)
 
-ADD_EXECUTABLE(persistence src/persistence.cc src/kvstore.cc)
+ADD_EXECUTABLE(persistence src/persistence.cc src/kvstore.cc src/sstable/sstable.cpp src/memtable/memtable.cpp src/global.cpp)
 
 ADD_EXECUTABLE(test src/test.cc src/kvstore.cc src/sstable/sstable.cpp src/memtable/memtable.cpp src/global.cpp)

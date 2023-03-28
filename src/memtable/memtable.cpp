@@ -72,7 +72,7 @@ std::string MemTable::get(uint64_t key) const
     }
     if (current->next[0]->key == key) {
         if (current->next[0]->value == "~DELETED~") {
-            return "";
+            return "~DELETED~";
         }
         return current->next[0]->value;
     }

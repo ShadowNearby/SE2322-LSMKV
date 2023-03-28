@@ -5,7 +5,7 @@
 
 uint64_t current_timestamp = 0;
 //uint32_t current_level = 0;
-//uint32_t current_level_count = 0;
+uint32_t merge_file_count = 0;
 std::map<uint32_t, std::map<std::string, IndexData>> all_sst_index = std::map<uint32_t, std::map<std::string, IndexData>>();
 
 void long_to_bytes(uint64_t num, char **des)

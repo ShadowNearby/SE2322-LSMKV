@@ -5,15 +5,31 @@ KVStore::KVStore(const std::string &dir) : KVStoreAPI(dir)
 {
     data_dir = dir;
     table = new MemTable();
+    std::vector<std::string> dir_list;
+    utils::scanDir(data_dir, dir_list);
+    all_sst_index[0] = std::map<std::string, IndexData>();
+    for (const auto &level_str: dir_list) {
+        uint32_t level_number = stoul(level_str.substr(level_str.find_last_of('-') + 1));
+        std::vector<std::string> file_list;
+        std::string dir_path = data_dir + level_str + "/";
+        utils::scanDir(dir_path, file_list);
+        for (const auto &file: file_list) {
+            std::string file_path = dir_path + file;
+            SSTable::read_sst_header_index(level_number, file_path);
+        }
+    }
 }
 
 KVStore::~KVStore()
 {
-    for (uint64_t i = 0; i <= current_timestamp; ++i) {
-        auto file_name = data_dir + std::to_string(i) + ".sst";
-        std::remove(file_name.c_str());
-    }
     delete table;
+    for (auto &sst_dir: all_sst_index) {
+        for (const auto &sst: sst_dir.second) {
+            utils::rmfile(sst.first.c_str());
+        }
+        std::string dir_path = data_dir + "level-" + std::to_string(sst_dir.first);
+        utils::rmdir(dir_path.c_str());
+    }
 }
 
 /**
@@ -43,26 +59,26 @@ void KVStore::put(uint64_t key, const std::string &s)
 std::string KVStore::get(uint64_t key)
 {
     auto result = table->get(key);
-    if (result == "~DELETE~")
+    if (result == "~DELETED~")
         return "";
     if (!result.empty())
         return result;
+    uint64_t result_timestamp = 0;
+    result = "";
     for (const auto &sst_dir: all_sst_index) {
-        uint64_t result_timestamp = 0;
-        result = "";
         for (const auto &sst: sst_dir.second) {
             if (result_timestamp < sst.second.timestamp) {
                 std::string value = SSTable::get_value_index(sst.first, key, sst.second);
-                if (!value.empty())
+                if (!value.empty()) {
+                    result_timestamp = sst.second.timestamp;
                     result = value;
+                }
             }
         }
-        if (result == "~DELETE~")
-            return "";
-        if (!result.empty())
-            return result;
     }
-    return "";
+    if (result == "~DELETED~")
+        return "";
+    return result;
 }
 
 /**
@@ -71,10 +87,11 @@ std::string KVStore::get(uint64_t key)
  */
 bool KVStore::del(uint64_t key)
 {
-    std::string find_result = get(key);
+    std::string find_result = this->get(key);
     if (find_result.empty())
         return false;
-    return table->put(key, "~DELETE~");
+    this->put(key, "~DELETED~");
+    return true;
 }
 
 /**
@@ -85,8 +102,6 @@ void KVStore::reset()
 {
     delete table;
     table = new MemTable();
-    std::vector<std::string> dir_list;
-    utils::scanDir(data_dir, dir_list);
     for (auto &sst_dir: all_sst_index) {
         for (const auto &sst: sst_dir.second) {
             utils::rmfile(sst.first.c_str());
@@ -111,10 +126,6 @@ void KVStore::scan(uint64_t key1, uint64_t key2, std::list<std::pair<uint64_t, s
         for (const auto &sst: sst_dir.second) {
             SSTable::scan_value(sst.first, key1, key2, key_map);
         }
-    }
-    for (uint64_t i = 1; i <= current_timestamp; ++i) {
-        std::string file_path = data_dir + std::to_string(i) + ".sst";
-
     }
     for (const auto &item: key_map) {
         list.emplace_back(item.first, item.second);

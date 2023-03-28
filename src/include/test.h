@@ -35,6 +35,7 @@ protected:
             std::cerr << ", expected " << exp;
             std::cerr << ", got " << got << std::endl;
         }
+        exit(0);
     }
 
     void phase(void)

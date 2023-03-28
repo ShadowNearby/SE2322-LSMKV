@@ -55,5 +55,5 @@ struct IndexData
 
 extern uint64_t current_timestamp;
 //extern uint32_t current_level;
-//extern uint32_t current_level_count;
+extern uint32_t merge_file_count;
 extern std::map<uint32_t, std::map<std::string, IndexData>> all_sst_index;

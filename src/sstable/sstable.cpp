@@ -44,8 +44,9 @@ void SSTable::to_sst_file(const std::string &dir)
     delete[] data;
 }
 
-bool SSTable::read_sst_file(const std::string &file_path)
+bool SSTable::read_sst_file_index(const std::string &file_path)
 {
+
     std::fstream f;
     f.open(file_path, std::ios::binary | std::ios::in);
     if (!f.is_open())
@@ -81,26 +82,41 @@ bool SSTable::read_sst_file(const std::string &file_path)
     return true;
 }
 
-bool SSTable::read_sst_header(const std::string &file_path)
+void SSTable::read_sst_header_index(uint32_t level, const std::string &file_path)
 {
+    IndexData index_data;
     std::fstream f;
     f.open(file_path, std::ios::binary | std::ios::in);
     if (!f.is_open())
-        return false;
-    char *data = new char[HEADER_BYTES];
-    f.read(data, HEADER_BYTES);
-    char *current = data;
-    timestamp = bytes_to_long(&current);
-    count = bytes_to_long(&current);
-    max_key = bytes_to_long(&current);
-    min_key = bytes_to_long(&current);
+        return;
+    long file_size = f.tellg();
+    f.seekg(0, std::fstream::end);
+    file_size = f.tellg() - file_size;
+    f.seekg(0, std::fstream::beg);
+    char *header_data = new char[HEADER_BYTES];
+    f.read(header_data, HEADER_BYTES);
+    char *current = header_data;
+    index_data.timestamp = bytes_to_long(&current);
+    current_timestamp = current_timestamp < index_data.timestamp ? index_data.timestamp : current_timestamp;
+    index_data.count = bytes_to_long(&current);
+    index_data.max_key = bytes_to_long(&current);
+    index_data.min_key = bytes_to_long(&current);
     std::string filter_string;
     for (uint32_t i = 0; i < FILTER_LONGS; ++i) {
         filter_string += std::bitset<64>(bytes_to_long(&current)).to_string();
     }
-    filter = std::bitset<FILTER_BITS>(filter_string);
-    delete[] data;
-    return true;
+    index_data.filter = std::bitset<FILTER_BITS>(filter_string);
+    delete[] header_data;
+    char *key_data = new char[index_data.count * 12];
+    f.read(key_data, (int) index_data.count * 12);
+    current = key_data;
+    for (uint64_t i = 0; i < index_data.count; ++i) {
+        index_data.key_list.emplace_back(bytes_to_long(&current));
+        index_data.offset_list.emplace_back(bytes_to_int(&current));
+    }
+    index_data.offset_list.emplace_back(file_size);
+    all_sst_index[level][file_path] = index_data;
+    delete[] key_data;
 }
 
 bool SSTable::key_exist(const std::string &file_path, uint64_t key)
@@ -314,7 +330,7 @@ SSTable::scan_value(const std::string &file_path, uint64_t key1, uint64_t key2, 
     for (uint64_t i = 0; i < target_len; ++i) {
         uint32_t len = offsets[i + 1] - offsets[i];
         std::string value = bytes_to_string(&current, len);
-        if (value.empty() || value == "~DELETE~")
+        if (value.empty() || value == "~DELETED~")
             continue;
         list[keys[i]] = value;
     }
@@ -346,10 +362,10 @@ std::string SSTable::get_value_index(const std::string &file_path, uint64_t key,
         return "";
     const auto &key_list = index_data.key_list;
     const auto &offset_list = index_data.offset_list;
-    uint64_t left = 0;
-    uint64_t right = count_exist - 1;
+    long left = 0;
+    long right = (long) count_exist - 1;
     while (left <= right) {
-        uint64_t mid = (left + right) / 2;
+        long mid = (left + right) / 2;
         uint64_t key_find = key_list[mid];
         if (key_find == key) {
             uint32_t offset_left = offset_list[mid];
@@ -375,6 +391,8 @@ std::string SSTable::get_value_index(const std::string &file_path, uint64_t key,
 
 void SSTable::merge(const std::string &data_dir)
 {
+    if (all_sst_index[0].size() <= 2)
+        return;
     for (const auto &sst_level_it: all_sst_index) {
         const auto &current_sst_level_index = sst_level_it.first;
         const auto &current_sst_level = sst_level_it.second;
@@ -385,15 +403,17 @@ void SSTable::merge(const std::string &data_dir)
             std::string level_dir = data_dir + "level-" + std::to_string(current_sst_level_index + 1);
             utils::mkdir(level_dir.c_str());
         }
-        std::vector<std::string> select_current_level_sst_path;
+        std::vector<std::pair<uint64_t, std::string>> select_level_sst_path;
         std::vector<uint64_t> current_level_max_key_list;
         std::vector<uint64_t> current_level_min_key_list;
         std::map<uint64_t, std::string> target;
         uint32_t count = current_sst_level_index == 0 ? current_sst_level.size() : current_sst_level.size() -
                                                                                    current_level_max_size;
-        auto sst_it_begin = current_sst_level.begin();
-        for (uint32_t i = 0; i < count; ++i, ++sst_it_begin) {
-            const auto &sst_index = sst_it_begin->second;
+//        count = current_sst_level.size();
+        get_newest_sst(count, current_sst_level_index, select_level_sst_path);
+        for (const auto &item: select_level_sst_path) {
+            auto &sst_path = item.second;
+            auto &sst_index = current_sst_level.at(sst_path);
             current_level_max_key_list.emplace_back(sst_index.max_key);
             current_level_min_key_list.emplace_back(sst_index.min_key);
         }
@@ -401,32 +421,30 @@ void SSTable::merge(const std::string &data_dir)
                                                            current_level_max_key_list.end());
         uint64_t current_level_min_key = *std::min_element(current_level_min_key_list.begin(),
                                                            current_level_min_key_list.end());
-        const auto next_sst_level = all_sst_index[current_sst_level_index + 1];
-        std::vector<std::string> select_next_level_sst_path;
+        const auto &next_sst_level = all_sst_index[current_sst_level_index + 1];
         for (const auto &sst_it: next_sst_level) {
             const auto &sst_index = sst_it.second;
             const auto &sst_path = sst_it.first;
-            if (sst_index.max_key <= current_level_max_key || sst_index.min_key >= current_level_min_key) {
-                read_sst_to_map(sst_path, sst_index, target);
-                select_next_level_sst_path.emplace_back(sst_path);
+            if (sst_index.max_key >= current_level_min_key && sst_index.min_key <= current_level_max_key) {
+                select_level_sst_path.emplace_back(sst_index.timestamp, sst_path);
             }
         }
-        sst_it_begin = current_sst_level.begin();
-        for (uint32_t i = 0; i < count; ++i, ++sst_it_begin) {
-            const auto &sst_path = sst_it_begin->first;
-            const auto &sst_index = sst_it_begin->second;
-            read_sst_to_map(sst_path, sst_index, target);
-            select_current_level_sst_path.emplace_back(sst_path);
-        }
-        for (const auto &sst_path: select_current_level_sst_path) {
-            all_sst_index[current_sst_level_index].erase(sst_path);
+        std::sort(select_level_sst_path.begin(), select_level_sst_path.end(),
+                  [](const std::pair<uint64_t, std::string> &a, const std::pair<uint64_t, std::string> &b) {
+                      return a.first < b.first;
+                  });
+        for (const auto &item: select_level_sst_path) {
+            const auto &sst_path = item.second;
+            bool is_current = is_current_level(current_sst_level_index, sst_path);
+            const IndexData &index_data = is_current ? current_sst_level.at(sst_path) : next_sst_level.at(
+                    sst_path);
+            read_sst_to_map(item.second, index_data, target);
+            is_current ? all_sst_index[current_sst_level_index].erase(sst_path) : all_sst_index[
+                    current_sst_level_index + 1].erase(sst_path);
             utils::rmfile(sst_path.c_str());
         }
-        for (const auto &sst_path: select_next_level_sst_path) {
-            all_sst_index[current_sst_level_index + 1].erase(sst_path);
-            utils::rmfile(sst_path.c_str());
-        }
-        maps_to_sst(current_sst_level_index + 1, data_dir, target);
+        uint64_t select_max_timestamp = select_level_sst_path[select_level_sst_path.size() - 1].first;
+        maps_to_sst(current_sst_level_index + 1, select_max_timestamp, data_dir, target);
     }
 }
 
@@ -450,30 +468,27 @@ SSTable::read_sst_to_map(const std::string &file_path, const IndexData &index_da
     delete[] data;
 }
 
-void SSTable::get_newest_sst(uint32_t n, uint32_t level, std::vector<std::string> &target)
+void SSTable::get_newest_sst(uint32_t n, uint32_t level, std::vector<std::pair<uint64_t, std::string>> &target)
 {
     const auto &current_level = all_sst_index[level];
-    std::map<uint64_t, std::string> time_map;
+    std::vector<std::pair<uint64_t, std::string>> time_map;
     for (const auto &sst_it: current_level) {
         const auto &sst_path = sst_it.first;
         const auto &sst_timestamp = sst_it.second.timestamp;
-        time_map[sst_timestamp] = sst_path;
+        time_map.emplace_back(sst_timestamp, sst_path);
     }
-    auto it = current_level.begin();
-    for (uint32_t i = 0; i < n; ++i, ++it) {
-        target.emplace_back(it->first);
+    std::sort(time_map.begin(), time_map.end(),
+              [](const std::pair<uint64_t, std::string> &a, const std::pair<uint64_t, std::string> &b) {
+                  return a.first < b.first;
+              });
+    for (uint32_t i = 0; i < n; ++i) {
+        target.emplace_back(time_map[i]);
     }
 }
 
-void SSTable::maps_to_sst(uint32_t level, const std::string &data_dir, const std::map<uint64_t, std::string> &target)
+void SSTable::maps_to_sst(uint32_t level, uint64_t timestamp, const std::string &data_dir,
+                          const std::map<uint64_t, std::string> &target)
 {
-    auto &current_level = all_sst_index[level];
-    int last_sst_number = -1;
-    if (!current_level.empty()) {
-        auto last = current_level.end()--;
-        std::string last_sst_path = last->first;
-        last_sst_number = (int) sst_number(last_sst_path);
-    }
     std::map<uint64_t, std::string> one_sst_data;
     uint64_t bytes_sum = HEADER_BYTES;
     for (const auto &it: target) {
@@ -481,35 +496,35 @@ void SSTable::maps_to_sst(uint32_t level, const std::string &data_dir, const std
         auto &value = it.second;
         uint32_t len = value.size();
         if (bytes_sum + len + 12 > TABLE_BYTES) {
-            last_sst_number++;
             std::string file_path =
-                    data_dir + "level-" + std::to_string(level) + "/" + std::to_string(last_sst_number) + ".sst";
-            one_map_to_sst(level, file_path, one_sst_data);
+                    data_dir + "level-" + std::to_string(level) + "/" + std::to_string(timestamp) +
+                    "_" + std::to_string(merge_file_count) + ".sst";
+            merge_file_count++;
+            one_map_to_sst(level, file_path, one_sst_data, timestamp);
             one_sst_data.clear();
             bytes_sum = HEADER_BYTES;
         }
         one_sst_data[key] = value;
         bytes_sum += 12 + len;
     }
-    if (!one_sst_data.empty()) {
-        last_sst_number++;
-        std::string file_path =
-                data_dir + "level-" + std::to_string(level) + "/" + std::to_string(last_sst_number) + ".sst";
-        one_map_to_sst(level, file_path, one_sst_data);
-        one_sst_data.clear();
-    }
-    current_timestamp++;
+    if (one_sst_data.empty())
+        return;
+    std::string file_path =
+            data_dir + "level-" + std::to_string(level) + "/" + std::to_string(timestamp) + "_" +
+            std::to_string(merge_file_count) +
+            ".sst";
+    merge_file_count++;
+    one_map_to_sst(level, file_path, one_sst_data, timestamp);
 }
 
 void
-SSTable::one_map_to_sst(uint32_t level, const std::string &file_path, const std::map<uint64_t, std::string> &target)
+SSTable::one_map_to_sst(uint32_t level, const std::string &file_path, const std::map<uint64_t, std::string> &target,
+                        uint64_t timestamp)
 {
     IndexData index_data;
     uint64_t max_key_mem = (--target.end())->first;
     uint64_t min_key_mem = target.begin()->first;
     uint64_t count = target.size();
-    current_timestamp++;
-    uint64_t timestamp = current_timestamp;
     size_t offset = 4 * 8 + count * 12 + FILTER_BYTES;
     char *data = new char[TABLE_BYTES];
     char *current = data;
@@ -554,11 +569,9 @@ SSTable::one_map_to_sst(uint32_t level, const std::string &file_path, const std:
     delete[] data;
 }
 
-uint32_t SSTable::sst_number(const std::string &file_path)
+bool SSTable::is_current_level(uint32_t level, const std::string &file_path)
 {
-    auto left = file_path.find_last_of('/');
-    auto right = file_path.find_last_of('.');
-    auto len = right - left;
-    auto number_str = file_path.substr(left, len);
-    return stoul(number_str);
+    auto left = file_path.find_last_of('-');
+    auto right = file_path.find_last_of('/');
+    return level == stoul(file_path.substr(left + 1, right - left - 1));
 }

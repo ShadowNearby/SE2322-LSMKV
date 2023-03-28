@@ -27,9 +27,9 @@ public:
 
     void to_sst_file(const std::string &dir);
 
-    bool read_sst_file(const std::string &file_path);
+    bool read_sst_file_index(const std::string &file_path);
 
-    bool read_sst_header(const std::string &file_path);
+    static void read_sst_header_index(uint32_t level, const std::string &file_path);
 
     static bool key_exist(const std::string &file_path, uint64_t key);
 
@@ -47,14 +47,16 @@ public:
 
     static void merge(const std::string &data_dir);
 
-    static void maps_to_sst(uint32_t level, const std::string &data_dir, const std::map<uint64_t, std::string> &target);
+    static void maps_to_sst(uint32_t level, uint64_t timestamp, const std::string &data_dir,
+                            const std::map<uint64_t, std::string> &target);
 
     static void
-    one_map_to_sst(uint32_t level, const std::string &file_path, const std::map<uint64_t, std::string> &target);
+    one_map_to_sst(uint32_t level, const std::string &file_path, const std::map<uint64_t, std::string> &target,
+                   uint64_t timestamp);
 
-    static uint32_t sst_number(const std::string &file_path);
+    static bool is_current_level(uint32_t level, const std::string &file_path);
 
-    static void get_newest_sst(uint32_t n, uint32_t level, std::vector<std::string> &target);
+    static void get_newest_sst(uint32_t n, uint32_t level, std::vector<std::pair<uint64_t, std::string>> &target);
 };
 
 
