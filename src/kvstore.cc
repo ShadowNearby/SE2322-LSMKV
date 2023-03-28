@@ -57,6 +57,7 @@ std::string KVStore::get(uint64_t key)
     for (const auto &sst_dir: all_sst_index) {
         for (const auto &sst: sst_dir.second) {
             if (result_timestamp < sst.second.timestamp) {
+//                std::string value = SSTable::get_value_index(sst.first, key, sst.second);
                 std::string value = SSTable::get_value_index(sst.first, key, sst.second);
                 if (!value.empty()) {
                     result_timestamp = sst.second.timestamp;
@@ -100,6 +101,8 @@ void KVStore::reset()
         sst_dir.second.clear();
     }
     current_timestamp = 0;
+    merge_file_count = 0;
+    all_sst_index.clear();
 }
 
 /**

@@ -17,7 +17,9 @@
 #include <memory>
 #include <algorithm>
 #include <filesystem>
-
+#include <chrono>
+#include <cassert>
+#include <cmath>
 
 const double TABLE_P = 0.25;
 const uint32_t TABLE_MAX_LEVEL = 32;
@@ -31,6 +33,7 @@ const uint32_t FILTER_LONGS = FILTER_BYTES / 8;
 const uint32_t FILTER_BITS = FILTER_BYTES * 8;
 const std::string TIERING_STR = "Tiering";
 const std::string LEVEL_STR = "Leveling";
+const std::string DATA_PATH = "../data/";
 
 void long_to_bytes(uint64_t num, char **des);
 

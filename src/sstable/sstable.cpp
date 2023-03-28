@@ -356,10 +356,6 @@ std::string SSTable::get_value_index(const std::string &file_path, uint64_t key,
             return "";
         }
     }
-    std::fstream f;
-    f.open(file_path, std::ios::binary | std::ios::in);
-    if (!f.is_open())
-        return "";
     const auto &key_list = index_data.key_list;
     const auto &offset_list = index_data.offset_list;
     long left = 0;
@@ -373,6 +369,10 @@ std::string SSTable::get_value_index(const std::string &file_path, uint64_t key,
             uint32_t len = offset_right - offset_left;
             char *result_c_str = new char[len + 1];
             result_c_str[len] = '\0';
+            std::fstream f;
+            f.open(file_path, std::ios::binary | std::ios::in);
+            if (!f.is_open())
+                return "";
             f.seekg(offset_left);
             f.read(result_c_str, len);
             std::string result(result_c_str);
@@ -385,7 +385,6 @@ std::string SSTable::get_value_index(const std::string &file_path, uint64_t key,
             right = mid - 1;
         }
     }
-    f.close();
     return "";
 }
 

@@ -84,7 +84,7 @@ public:
 
     virtual void start_test(void *args = NULL)
     {
-        std::cout << "No test is implemented." << std::endl;
+        std::cout << "No normal_test is implemented." << std::endl;
     }
 
 };
