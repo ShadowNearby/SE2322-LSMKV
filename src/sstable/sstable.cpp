@@ -391,25 +391,30 @@ std::string SSTable::get_value_index(const std::string &file_path, uint64_t key,
 
 void SSTable::merge(const std::string &data_dir)
 {
-    if (all_sst_index[0].size() <= 2)
+    if (all_sst_index[0].size() <= config_level[0].first)
         return;
     for (const auto &sst_level_it: all_sst_index) {
         const auto &current_sst_level_index = sst_level_it.first;
         const auto &current_sst_level = sst_level_it.second;
-        uint32_t current_level_max_size = 1 << (current_sst_level_index + 1);
+        uint32_t current_level_max_size = config_level[current_sst_level_index].first;
+        if (!current_level_max_size) {
+            current_level_max_size = config_level[current_sst_level_index - 1].first * 2;
+            config_level[current_sst_level_index].first = current_level_max_size;
+        }
         if (current_sst_level.size() <= current_level_max_size)
             return;
         if (all_sst_index[current_sst_level_index + 1].empty()) {
             std::string level_dir = data_dir + "level-" + std::to_string(current_sst_level_index + 1);
             utils::mkdir(level_dir.c_str());
         }
+        LevelType current_sst_level_type = config_level[current_sst_level_index].second;
+        LevelType next_sst_level_type = config_level[current_sst_level_index + 1].second;
         std::vector<std::pair<uint64_t, std::string>> select_level_sst_path;
         std::vector<uint64_t> current_level_max_key_list;
         std::vector<uint64_t> current_level_min_key_list;
         std::map<uint64_t, std::string> target;
-        uint32_t count = current_sst_level_index == 0 ? current_sst_level.size() : current_sst_level.size() -
-                                                                                   current_level_max_size;
-//        count = current_sst_level.size();
+        uint32_t count = current_sst_level_type == Tiering ? current_sst_level.size() : current_sst_level.size() -
+                                                                                        current_level_max_size;
         get_newest_sst(count, current_sst_level_index, select_level_sst_path);
         for (const auto &item: select_level_sst_path) {
             auto &sst_path = item.second;
@@ -422,11 +427,13 @@ void SSTable::merge(const std::string &data_dir)
         uint64_t current_level_min_key = *std::min_element(current_level_min_key_list.begin(),
                                                            current_level_min_key_list.end());
         const auto &next_sst_level = all_sst_index[current_sst_level_index + 1];
-        for (const auto &sst_it: next_sst_level) {
-            const auto &sst_index = sst_it.second;
-            const auto &sst_path = sst_it.first;
-            if (sst_index.max_key >= current_level_min_key && sst_index.min_key <= current_level_max_key) {
-                select_level_sst_path.emplace_back(sst_index.timestamp, sst_path);
+        if (next_sst_level_type == Leveling) {
+            for (const auto &sst_it: next_sst_level) {
+                const auto &sst_index = sst_it.second;
+                const auto &sst_path = sst_it.first;
+                if (sst_index.max_key >= current_level_min_key && sst_index.min_key <= current_level_max_key) {
+                    select_level_sst_path.emplace_back(sst_index.timestamp, sst_path);
+                }
             }
         }
         std::sort(select_level_sst_path.begin(), select_level_sst_path.end(),

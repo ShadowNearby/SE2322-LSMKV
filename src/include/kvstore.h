@@ -27,4 +27,8 @@ public:
     void reset() override;
 
     void scan(uint64_t key1, uint64_t key2, std::list<std::pair<uint64_t, std::string> > &list) override;
+
+    void config_init(const std::string &file_path);
+
+    void data_init(const std::string &data_path);
 };

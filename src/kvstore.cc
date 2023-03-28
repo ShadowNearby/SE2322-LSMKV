@@ -5,19 +5,8 @@ KVStore::KVStore(const std::string &dir) : KVStoreAPI(dir)
 {
     data_dir = dir;
     table = new MemTable();
-    std::vector<std::string> dir_list;
-    utils::scanDir(data_dir, dir_list);
-    all_sst_index[0] = std::map<std::string, IndexData>();
-    for (const auto &level_str: dir_list) {
-        uint32_t level_number = stoul(level_str.substr(level_str.find_last_of('-') + 1));
-        std::vector<std::string> file_list;
-        std::string dir_path = data_dir + level_str + "/";
-        utils::scanDir(dir_path, file_list);
-        for (const auto &file: file_list) {
-            std::string file_path = dir_path + file;
-            SSTable::read_sst_header_index(level_number, file_path);
-        }
-    }
+    config_init(dir + "../default.conf");
+    data_init(dir);
 }
 
 KVStore::~KVStore()
@@ -129,5 +118,45 @@ void KVStore::scan(uint64_t key1, uint64_t key2, std::list<std::pair<uint64_t, s
     }
     for (const auto &item: key_map) {
         list.emplace_back(item.first, item.second);
+    }
+}
+
+void KVStore::config_init(const std::string &file_path)
+{
+    std::fstream f;
+    f.open(file_path, std::ios::in);
+    if (!f.is_open()) {
+        return;
+    }
+    std::string level_str, max_count_str, type_str;
+    while (!f.eof()) {
+        f >> level_str >> max_count_str >> type_str;
+        uint32_t level = stoul(level_str);
+        uint32_t max_count = stoul(max_count_str);
+        LevelType type;
+        if (type_str == TIERING_STR)
+            type = Tiering;
+        else if (type_str == LEVEL_STR)
+            type = Leveling;
+        else
+            std::cerr << "error level type: " << type_str << std::endl;
+        config_level[level] = std::make_pair(max_count, type);
+    }
+}
+
+void KVStore::data_init(const std::string &data_path)
+{
+    std::vector<std::string> dir_list;
+    utils::scanDir(data_path, dir_list);
+    all_sst_index[0] = std::map<std::string, IndexData>();
+    for (const auto &level_str: dir_list) {
+        uint32_t level_number = stoul(level_str.substr(level_str.find_last_of('-') + 1));
+        std::vector<std::string> file_list;
+        std::string dir_path = data_dir + level_str + "/";
+        utils::scanDir(dir_path, file_list);
+        for (const auto &file: file_list) {
+            std::string file_path = dir_path + file;
+            SSTable::read_sst_header_index(level_number, file_path);
+        }
     }
 }

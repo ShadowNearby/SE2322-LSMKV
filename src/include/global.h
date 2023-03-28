@@ -29,6 +29,8 @@ const uint32_t HEADER_BYTES = 10240 + 8 * 4;
 const uint32_t FILTER_BYTES = 10240;
 const uint32_t FILTER_LONGS = FILTER_BYTES / 8;
 const uint32_t FILTER_BITS = FILTER_BYTES * 8;
+const std::string TIERING_STR = "Tiering";
+const std::string LEVEL_STR = "Leveling";
 
 void long_to_bytes(uint64_t num, char **des);
 
@@ -52,8 +54,12 @@ struct IndexData
     std::vector<uint64_t> key_list;
     std::vector<uint32_t> offset_list;
 };
-
+enum LevelType
+{
+    Leveling,
+    Tiering,
+};
 extern uint64_t current_timestamp;
-//extern uint32_t current_level;
+extern std::map<uint32_t, std::pair<uint32_t, LevelType>> config_level;
 extern uint32_t merge_file_count;
 extern std::map<uint32_t, std::map<std::string, IndexData>> all_sst_index;
