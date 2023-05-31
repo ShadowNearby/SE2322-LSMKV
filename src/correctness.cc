@@ -41,7 +41,7 @@ private:
         std::list<std::pair<uint64_t, std::string> > list_stu;
 
         for (i = 0; i < max / 2; ++i) {
-            list_ans.emplace_back(std::make_pair(i, std::string(i + 1, 's')));
+            list_ans.emplace_back(i, std::string(i + 1, 's'));
         }
 
         store.scan(0, max / 2 - 1, list_stu);
@@ -81,11 +81,11 @@ private:
     }
 
 public:
-    CorrectnessTest(const std::string &dir, bool v = true) : Test(dir, v)
+    explicit CorrectnessTest(const std::string &dir, bool v = true) : Test(dir, v)
     {
     }
 
-    void start_test(void *args = NULL) override
+    void start_test(void *args = nullptr) override
     {
         std::cout << "KVStore Correctness Test" << std::endl;
 

@@ -44,7 +44,7 @@ void SSTable::to_sst_file(const std::string &dir)
     delete[] data;
 }
 
-bool SSTable::read_sst_file_index(const std::string &file_path)
+__attribute__((unused)) bool SSTable::read_sst_file_index(const std::string &file_path)
 {
 
     std::fstream f;
@@ -119,7 +119,7 @@ void SSTable::read_sst_header_index(uint32_t level, const std::string &file_path
     delete[] key_data;
 }
 
-bool SSTable::key_exist(const std::string &file_path, uint64_t key)
+__attribute__((unused)) bool SSTable::key_exist(const std::string &file_path, uint64_t key)
 {
     std::fstream f;
     f.open(file_path, std::ios::binary | std::ios::in);
@@ -469,7 +469,10 @@ SSTable::read_sst_to_map(const std::string &file_path, const IndexData &index_da
         uint32_t index_begin = index_data.offset_list[i];
         uint32_t index_end = index_data.offset_list[i + 1];
         uint32_t len = index_end - index_begin;
-        target[index_data.key_list[i]] = bytes_to_string(&current, len);
+        auto val = bytes_to_string(&current, len);
+        if (is_last_level(file_path) && val == "~DELETED~")
+            continue;
+        target[index_data.key_list[i]] = val;
     }
     delete[] data;
 }
@@ -580,4 +583,11 @@ bool SSTable::is_current_level(uint32_t level, const std::string &file_path)
     auto left = file_path.find_last_of('-');
     auto right = file_path.find_last_of('/');
     return level == stoul(file_path.substr(left + 1, right - left - 1));
+}
+
+bool SSTable::is_last_level(const std::string &file_path)
+{
+    auto left = file_path.find_last_of('-');
+    auto right = file_path.find_last_of('/');
+    return all_sst_index.size() == atoi(file_path.substr(left, right - left).c_str());
 }

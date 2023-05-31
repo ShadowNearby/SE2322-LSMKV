@@ -27,11 +27,11 @@ public:
 
     void to_sst_file(const std::string &dir);
 
-    bool read_sst_file_index(const std::string &file_path);
+    __attribute__((unused)) bool read_sst_file_index(const std::string &file_path);
 
     static void read_sst_header_index(uint32_t level, const std::string &file_path);
 
-    static bool key_exist(const std::string &file_path, uint64_t key);
+    __attribute__((unused)) static bool key_exist(const std::string &file_path, uint64_t key);
 
     static void
     read_sst_to_map(const std::string &file_path, const IndexData &index_data, std::map<uint64_t, std::string> &target);
@@ -57,6 +57,8 @@ public:
     static bool is_current_level(uint32_t level, const std::string &file_path);
 
     static void get_newest_sst(uint32_t n, uint32_t level, std::vector<std::pair<uint64_t, std::string>> &target);
+
+    static bool is_last_level(const std::string &basicString);
 };
 
 
